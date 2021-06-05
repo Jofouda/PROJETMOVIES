@@ -1,0 +1,218 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+
+title: "Projet movies"
+output: flexdashboard::flex_dashboard
+css : style.css
+orientation : rows
+logo: 1-10021_clipart-movies-hd-movies-logo-transparent.jpeg
+---
+
+```{r setup, include=FALSE}
+library(RMySQL)
+library(ggplot2)
+library(dplyr)
+library(scales)
+library(yaml)
+library(RSQLite)
+library(DBI)
+library(tidyr)
+library(treemapify)
+library(treemap)
+library(ProFit)
+library(wesanderson)
+library(lubridate)
+library(dplyr)
+library(packcircles)
+library(corrplot)
+library(treemapify)
+library(splitstackshape)
+library(tidytext)
+library(tm)
+library(NLP)
+library(stopwords)
+library(igraph)
+library(glue)
+library(networkD3)
+#library(ggthemr)
+#library(ggthemes)
+library(flexdashboard)
+library(DT)
+library(janitor)
+library(ggfittext)
+library(gridExtra)
+library(ggforce)
+library(RColorBrewer)
+library(viridis)
+library(forcats)
+library(scales)
+DB <- dbConnect(RMySQL::MySQL(), user="jfoudambezele", host="127.0.0.1",password="w7YH:Y@nF_\\4z>", dbname="bdd_jfoudambezele")
+```
+
+
+Messages {data-navmenu="ANALYSE MOVIES" data-icon="people-outline" .storyboard}
+=====================================  
+
+
+### Nombre de votes par moyenne
+    
+```{r}
+#--------------   Aggregation Mongodb 
+tratings = dbGetQuery(DB, "SELECT * FROM titleratings;")
+
+# vote/moyenne
+travg = tratings %>% group_by (averageRating, numVotes)
+travg
+
+courbe1 = ggplot(travg) +
+  aes(x = averageRating) +
+  geom_histogram(fill ="blue", colour = "black", binwidth = 3) +
+  ggtitle("Nombres de votes par moyenne") +
+  xlab("averageRating") +
+  ylab("numVotes")
+courbe1
+``` 
+
+    
+### Nombre de films en fonction du nombre de votes
+    
+```{r}
+# nbre de films /votes
+tratings = dbGetQuery(DB, "SELECT * FROM titleratings;")
+
+trconst = tratings %>% group_by (tconst, numVotes)
+trconst1 = trconst %>% group_by(numVotes)%>% summarise(count = n())  
+
+ courbe2 = ggplot(trconst1) +
+  aes(x = numVotes) +
+  geom_histogram(fill ="cyan", colour = "blue", binwidth = 3) +
+  ggtitle("Nombre de films par nombre de votes") +
+  xlab("numVote") +
+  ylab("count=n()")
+
+courbe2
+```
+    
+### Pourcentage de films classifiés "genres"
+
+```{r}
+nontitleori = dbGetQuery(DB, " SELECT tconst, primaryTitle FROM titlebasics WHERE  NOT primaryTitle = originalTitle ;")
+
+nontitleori1 = nrow(nontitleori)
+
+totfilms = nontitleori1 + nbretitreorig1
+
+v1 <-c(nontitleori1, nbretitreorig1)
+v2 <- c('nontitleori1', 'nbretitreorig1')
+v3 <- c((nontitleori1/totfilms)*100, (nbretitreorig1/totfilms)*100)
+donnees<-data.frame(v2,v1,v3)
+colnames(donnees) <-c("pourcentagetitre","titreorigin","prop")
+donnees <- donnees %>%
+  arrange(desc(pourcentagetitre)) %>%
+  mutate(lab.ypos = cumsum(prop) - 0.5*prop)
+donnees
+mycols <- c("#0073C2FF", "#EFC000FF", "#868686FF", "#CD534CFF")
+
+camtitle =ggplot(donnees, aes(x = 2, y = prop, fill = pourcentagetitre)) +
+  geom_bar(stat = "identity", color = "white") +
+  coord_polar(theta = "y", start = 0)+
+  geom_text(aes(y = lab.ypos, label = prop), color = "white")+
+  scale_fill_manual(values = mycols) +
+  theme_void()+
+  xlim(0.5, 2.5)
+camtitle
+
+```
+
+### Treemap "genres"
+    
+```{r}
+# treemap genres
+
+tbas = tbasics %>% group_by(genres, runtimeMinutes) %>%  summarise(count = n())
+tbasi = tbas[-which(tbas$genres==""),]
+tbasi1 = tbasi[-which(tbasi$count=="1"),]
+tbas1 = treemap(tbasi1,index = c("genres"),vSize ="count", palette = "Blues", type="value") 
+```
+ 
+
+```
+
+KPI {data-navmenu="Analyse globale" data-orientation=rows}
+===================================== 
+
+
+## Row 1 {data-height=150}
+-----------------------------------------------------------------------
+
+### le maximun de caractère que contient un titre
+
+```{r}
+
+longtitle = dbGetQuery(DB, " SELECT MAX(LENGTH (primaryTitle)) FROM titlebasics;")
+lon = longtitle$`MAX(LENGTH (primaryTitle))`[1:1]
+```
+
+
+## Row 2 {data-height=150}
+-----------------------------------------------------------------------
+
+
+### Nombre de votes pour moyenne min
+
+```{r}
+minvmoymaxvote1 = dbGetQuery(DB, " SELECT tconst, MIN(numVotes), averageRating FROM titleratings ;")
+moyminvote = minvmoymaxvote1$averageRating[1:1]
+moyminvote 
+valueBox(moyenneMsg, icon = "far fa-envelope", color="danger")
+```
+
+### Nombre de votes pour moyenne max
+
+```{r}
+moymaxvmoymaxvote = dbGetQuery(DB, "SELECT tconst, MAX(numVotes), averageRating FROM titleratings;")
+moymaxvote = moymaxvmoymaxvote$averageRating[1:1]
+moymaxvote 
+valueBox(userMooc, icon ="fas fa-user-friends", color="rgb(26,110,204)")
+```
+
+## Row 3 {data-height=150}
+-----------------------------------------------------------------------
+
+### Moyenne nombre de votes
+
+```{r}
+moynbrevote = dbGetQuery(DB, "SELECT AVG(numVotes) FROM titleratings;")
+moynbrevote = moynbrevote$`AVG(numVotes)`[1:1]
+moynbrevote
+valueBox(nbresp, icon = "fa-comments", color="warning")
+```
+
+### Nombre total de votes
+
+```{r}
+nbretotvote = dbGetQuery(DB, "SELECT SUM(numVotes) FROM titleratings;")
+nbretotvote = nbretotvote$`SUM(numVotes)`[1:1]
+```
+
+### Minimum nombre de votes
+```{r}
+minnbrevote = dbGetQuery(DB, "SELECT MIN(numVotes) FROM  titleratings;")
+minnbrevote= minnbrevote$`MIN(numVotes)`[1:1]
+```
+
+### Maximum nombre de votes
+```{r}
+maxnbrevote = dbGetQuery(DB, "SELECT MAX(numVotes) FROM  titleratings;")
+nbrevotemax = maxnbrevote$`MAX(numVotes)`[1:1]
+```
+
+
+```
+
+
+    
+
